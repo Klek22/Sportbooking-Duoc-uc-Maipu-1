@@ -1,0 +1,159 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string (required)
+    //   - role: string (required, 'student' | 'admin')
+    //
+    // Collection: bookings
+    // Document ID: {bookingId}
+    // Fields:
+    //   - fieldId: string (required, 'cancha-1' | 'cancha-2' | 'padel-1' | 'padel-2')
+    //   - userId: string (required)
+    //   - userName: string (required)
+    //   - startTime: timestamp (required)
+    //   - endTime: timestamp (required)
+    //   - status: string (required, 'confirmed' | 'cancelled')
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: tournaments
+    // Document ID: {tournamentId}
+    // Fields:
+    //   - name: string (required)
+    //   - description: string
+    //   - createdBy: string (required)
+    //   - startDate: timestamp (required)
+    //   - endDate: timestamp (required)
+    //   - status: string (required, 'upcoming' | 'ongoing' | 'completed')
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "bor.pavez@duocuc.cl" || request.auth.token.email == "borklexx@gmail.com");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'isVip', 'experience']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.email is string &&
+             data.displayName is string && data.displayName.size() > 0 &&
+             data.role in ['student', 'admin'] &&
+             data.isVip is bool &&
+             data.experience.futbol in ['principiante', 'intermedio', 'avanzado'] &&
+             data.experience.padel in ['principiante', 'intermedio', 'avanzado'];
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['fieldId', 'userId', 'userName', 'participants', 'startTime', 'endTime', 'status', 'paymentMethod', 'paymentStatus', 'isVipBooking', 'createdAt', 'price', 'bookingType']) &&
+             data.fieldId in ['cancha-1', 'cancha-2', 'padel-1', 'padel-2'] &&
+             data.userId is string &&
+             data.userName is string && data.userName.size() > 0 &&
+             data.participants is list &&
+             data.startTime is timestamp &&
+             data.endTime is timestamp &&
+             data.status in ['confirmed', 'cancelled'] &&
+             data.paymentMethod in ['efectivo', 'transferencia'] &&
+             data.paymentStatus in ['pendiente', 'completado', 'esperando_validacion'] &&
+             data.price is number &&
+             data.bookingType in ['regular', 'friendly', 'tournament'] &&
+             data.isVipBooking is bool &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFriendlyMatch(data) {
+      return data.keys().hasAll(['sport', 'level', 'date', 'fieldId', 'organizerId', 'participants', 'maxParticipants', 'status']) &&
+             data.sport in ['futbol', 'padel'] &&
+             data.level in ['principiante', 'intermedio', 'avanzado'] &&
+             data.date is timestamp &&
+             data.fieldId is string &&
+             data.organizerId == request.auth.uid &&
+             data.participants is list &&
+             data.maxParticipants is number &&
+             data.status in ['open', 'full', 'completed'];
+    }
+
+    function isValidFeedback(data) {
+      return data.keys().hasAll(['userId', 'userName', 'type', 'comment', 'status', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() > 0 &&
+             data.type in ['review', 'complaint'] &&
+             data.comment is string && data.comment.size() > 0 && data.comment.size() < 2000 &&
+             data.status in ['pending', 'resolved', 'ignored'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidEquipmentRequest(data) {
+      return data.keys().hasAll(['userId', 'userName', 'items', 'status', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() > 0 &&
+             data.items is list &&
+             data.status in ['pending', 'approved', 'rejected', 'returned'] &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /failed_attempts/{email} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'student' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data) && (request.resource.data.userId == request.auth.uid) && (!request.resource.data.isVipBooking || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isVip == true);
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin()) && isValidBooking(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /friendlyMatches/{matchId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidFriendlyMatch(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(resource.data.organizerId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'status']));
+    }
+
+    match /tournaments/{tournamentId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidFeedback(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /equipmentRequests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidEquipmentRequest(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+  }
+}

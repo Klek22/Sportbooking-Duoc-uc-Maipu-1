@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "isVip": { "type": "boolean" },
+        "experience": {
+          "type": "object",
+          "properties": {
+            "futbol": { "type": "string", "enum": ["principiante", "intermedio", "avanzado"] },
+            "padel": { "type": "string", "enum": ["principiante", "intermedio", "avanzado"] }
+          }
+        }
+      },
+      "required": ["uid", "email", "displayName", "role", "isVip", "experience"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Field reservation details",
+      "type": "object",
+      "properties": {
+        "fieldId": { "type": "string", "enum": ["cancha-1", "cancha-2", "padel-1", "padel-2"] },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["confirmed", "cancelled"] },
+        "paymentMethod": { "type": "string", "enum": ["efectivo", "transferencia"] },
+        "paymentStatus": { "type": "string", "enum": ["pendiente", "completado", "esperando_validacion"] },
+        "price": { "type": "number" },
+        "bookingType": { "type": "string", "enum": ["regular", "friendly", "tournament"] },
+        "receiptUrl": { "type": "string" },
+        "isVipBooking": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fieldId", "userId", "userName", "startTime", "endTime", "status", "paymentMethod", "paymentStatus", "isVipBooking", "createdAt", "price", "bookingType"]
+    },
+    "FriendlyMatch": {
+      "title": "FriendlyMatch",
+      "description": "Friendly match details",
+      "type": "object",
+      "properties": {
+        "sport": { "type": "string", "enum": ["futbol", "padel"] },
+        "level": { "type": "string", "enum": ["principiante", "intermedio", "avanzado"] },
+        "date": { "type": "string", "format": "date-time" },
+        "fieldId": { "type": "string" },
+        "organizerId": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "maxParticipants": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "full", "completed"] }
+      },
+      "required": ["sport", "level", "date", "fieldId", "organizerId", "participants", "maxParticipants", "status"]
+    },
+    "FailedAttempt": {
+      "title": "FailedAttempt",
+      "description": "Tracking failed login attempts for password recovery",
+      "type": "object",
+      "properties": {
+        "count": { "type": "number" },
+        "lastAttempt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["count", "lastAttempt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/bookings/{bookingId}": { "schema": "Booking", "description": "Field reservations" },
+    "/tournaments/{tournamentId}": { "schema": "Tournament", "description": "Tournament information" },
+    "/friendlyMatches/{matchId}": { "schema": "FriendlyMatch", "description": "Friendly matches" },
+    "/failed_attempts/{email}": { "schema": "FailedAttempt", "description": "Failed login attempt counters" }
+  }
+}
